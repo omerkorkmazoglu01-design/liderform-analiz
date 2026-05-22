@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LİDERFORM ANALİZ</title>
+  <style>
+    :root {
+      --koyu: #1a1a2e;
+      --orta: #16213e;
+      --accent: #0f3460;
+      --altin: #e94560;
+      --yesil: #1b5e20;
+      --kirmizi: #b71c1c;
+      --turuncu: #e65100;
+      --mavi: #1565c0;
+      --bg: #f0f4f8;
+      --kart: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: #222; }
+
+    /* HEADER */
+    header {
+      background: linear-gradient(135deg, var(--koyu), var(--accent));
+      color: #fff; padding: 18px 24px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    header .logo { font-size: 2rem; }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: 1px; }
+    header p  { font-size: .8rem; opacity: .75; margin-top: 2px; }
+
+    /* SEARCH BAR */
+    .search-wrap {
+      background: var(--orta); padding: 20px 24px;
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+    .search-wrap input {
+      flex: 1; min-width: 260px;
+      padding: 12px 16px; border-radius: 8px; border: none;
+      font-size: 1rem; background: #fff; color: #222;
+      outline: 2px solid transparent;
+      transition: outline .2s;
+    }
+    .search-wrap input:focus { outline-color: var(--altin); }
+    .search-wrap button {
+      padding: 12px 28px; border-radius: 8px; border: none;
+      background: var(--altin); color: #fff; font-weight: 700;
+      font-size: 1rem; cursor: pointer; transition: opacity .2s;
+      white-space: nowrap;
+    }
+    .search-wrap button:hover { opacity: .85; }
+    .search-wrap button:disabled { opacity: .5; cursor: default; }
+
+    /* MAIN */
+    main { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+    /* DURUM */
+    #durum {
+      text-align: center; padding: 16px;
+      border-radius: 10px; margin-bottom: 20px;
+      font-weight: 600; display: none;
+    }
+    #durum.yukleniyor { background: #e3f2fd; color: #1565c0; display: block; }
+    #durum.hata       { background: #ffebee; color: #b71c1c; display: block; }
+
+    /* INFO KARTLARI */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin-bottom: 20px;
+    }
+    .info-kart {
+      background: var(--kart); border-radius: 10px;
+      padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    .info-kart .lbl { font-size: .72rem; color: #888; font-weight: 600; text-transform: uppercase; }
+    .info-kart .val { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; margin-top: 4px; }
+
+    /* TEMPO KARTI */
+    .tempo-kart {
+      border-radius: 10px; padding: 16px 20px;
+      margin-bottom: 20px; color: #fff;
+      box-shadow: 0 3px 12px rgba(0,0,0,.15);
+    }
+    .tempo-kart.HIZLI    { background: linear-gradient(135deg, #b71c1c, #e53935); }
+    .tempo-kart.YAVAS    { background: linear-gradient(135deg, #1b5e20, #43a047); }
+    .tempo-kart.BELIRSIZ { background: linear-gradient(135deg, #546e7a, #78909c); }
+    .tempo-kart .tempo-baslik { font-size: 1.2rem; font-weight: 800; margin-bottom: 6px; }
+    .tempo-kart .tempo-ac    { font-size: .88rem; opacity: .9; }
+    .tempo-roller { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+    .rol-badge {
+      background: rgba(255,255,255,.2);
+      border-radius: 20px; padding: 4px 12px;
+      font-size: .78rem; font-weight: 600;
+    }
+
+    /* TABLO */
+    .tablo-wrap { overflow-x: auto; margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th {
+      background: var(--accent); color: #fff;
+      padding: 10px 8px; text-align: center;
+      font-size: .78rem; white-space: nowrap;
+    }
+    td {
+      padding: 9px 8px; text-align: center;
+      border-bottom: 1px solid #e0e0e0;
+      vertical-align: middle;
+    }
+    tr.elendi td { background: #ffebee; color: #999; text-decoration: line-through; }
+    tr.elendi td.at-adi { color: #b71c1c; font-weight: 700; }
+    tr:not(.elendi):hover td { background: #e8f5e9; }
+    tr:nth-child(even):not(.elendi) td { background: #f5f9ff; }
+
+    .at-adi { text-align: left; font-weight: 700; }
+    .puan-yuksek { color: var(--yesil); font-weight: 800; font-size: 1rem; }
+    .puan-orta   { color: var(--turuncu); font-weight: 700; }
+    .puan-dusuk  { color: var(--kirmizi); font-weight: 600; }
+
+    .badge {
+      display: inline-block; border-radius: 12px;
+      padding: 2px 8px; font-size: .72rem; font-weight: 700;
+    }
+    .badge-sprinter  { background: #e3f2fd; color: #1565c0; }
+    .badge-geride    { background: #f3e5f5; color: #6a1b9a; }
+    .badge-ongrupu   { background: #e8f5e9; color: #1b5e20; }
+    .badge-oynkur    { background: #fff8e1; color: #e65100; }
+    .badge-belirsiz  { background: #eceff1; color: #546e7a; }
+    .badge-elendi    { background: #ffcdd2; color: #b71c1c; }
+    .badge-gecti     { background: #c8e6c9; color: #1b5e20; }
+
+    .s400-iyi { color: #b71c1c; font-weight: 800; }
+    .yildiz { color: gold; font-size: 1rem; }
+    .veri-eksik { color: #e65100; font-size: .7rem; font-weight: 700; }
+
+    /* ÖZET BANT */
+    .ozet {
+      background: var(--kart); border-radius: 10px;
+      padding: 14px 20px; margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      font-size: .88rem; color: #444;
+    }
+    .ozet strong { color: #1a1a2e; }
+
+    /* DETAY AÇILIR */
+    .detay-btn {
+      background: none; border: 1px solid #ccc;
+      border-radius: 6px; padding: 2px 8px;
+      cursor: pointer; font-size: .72rem; color: #555;
+    }
+    .detay-btn:hover { background: #f0f4f8; }
+    .detay-panel {
+      display: none; text-align: left;
+      background: #f8f9fa; border-radius: 6px;
+      padding: 8px 10px; margin-top: 4px;
+      font-size: .77rem; line-height: 1.7;
+    }
+    .detay-panel.acik { display: block; }
+
+    /* FOOTER */
+    footer {
+      text-align: center; padding: 18px;
+      font-size: .78rem; color: #aaa;
+      border-top: 1px solid #e0e0e0; margin-top: 16px;
+    }
+
+    /* LOADER */
+    .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 3px solid rgba(21,101,192,.3);
+      border-top-color: #1565c0;
+      border-radius: 50%; animation: spin .8s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.1rem; }
+      .search-wrap input { font-size: .9rem; }
+      th, td { padding: 7px 5px; font-size: .78rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏇</div>
+  <div>
+    <h1>LİDERFORM ANALİZ</h1>
+    <p>Koşu URL'si girin — ELEME + TEMPO analizi tarayıcınızda görünsün</p>
+  </div>
+</header>
+
+<div class="search-wrap">
+  <input id="urlInput" type="url"
+    placeholder="https://liderform.com.tr/program/2026-05-22/istanbul/3"
+    autocomplete="off" spellcheck="false">
+  <button id="analizBtn" onclick="analizBaslat()">🔍 ANALİZ ET</button>
+</div>
+
+<main>
+  <div id="durum"></div>
+  <div id="sonuclar"></div>
+</main>
+
+<footer>LİDERFORM ANALİZ v9.8 — Yalnızca liderform.com.tr linkleri desteklenir.</footer>
+
+<script>
+  const input = document.getElementById("urlInput");
+  input.addEventListener("keydown", e => { if (e.key === "Enter") analizBaslat(); });
+
+  async function analizBaslat() {
+    const url = input.value.trim();
+    if (!url) { gosterveDurumu("hata", "Lütfen bir URL girin."); return; }
+
+    const btn = document.getElementById("analizBtn");
+    btn.disabled = true;
+    gosterveDurumu("yukleniyor",
+      '<span class="spinner"></span> Veriler çekiliyor... Bu işlem 30-60 saniye sürebilir.');
+    document.getElementById("sonuclar").innerHTML = "";
+
+    try {
+      const r = await fetch("/analiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await r.json();
+      if (data.hata) {
+        gosterveDurumu("hata", "❌ " + data.hata);
+      } else {
+        gosterveDurumu("", "");
+        renderSonuc(data.sonuc);
+      }
+    } catch(e) {
+      gosterveDurumu("hata", "❌ Sunucu hatası: " + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function gosterveDurumu(tip, msg) {
+    const el = document.getElementById("durum");
+    el.className = tip;
+    el.innerHTML = msg || "";
+    el.style.display = (tip && msg) ? "block" : "none";
+  }
+
+  function renderSonuc(d) {
+    const wrap = document.getElementById("sonuclar");
+
+    // Info kartları
+    const irkLbl = d.is_arap ? "🔴 ARAP" : "🔵 İNGİLİZ";
+    const cinsiyetLbl = d.karma_cinsiyet
+      ? `Karma (${d.disi_sayisi}K / ${d.erkek_sayisi}E)` : "Tek cinsiyet";
+
+    wrap.innerHTML = `
+      <div class="info-grid">
+        <div class="info-kart"><div class="lbl">Şehir / Koşu</div>
+          <div class="val">${d.meta.sehir} – ${d.meta.kosu_no}. Koşu</div></div>
+        <div class="info-kart"><div class="lbl">Tarih</div>
+          <div class="val">${d.meta.tarih_tr}</div></div>
+        <div class="info-kart"><div class="lbl">Mesafe / Pist</div>
+          <div class="val">${d.kosu_mesafe}m / ${d.rinfo.pist || "?"}</div></div>
+        <div class="info-kart"><div class="lbl">Irk / Cinsiyet</div>
+          <div class="val">${irkLbl} | ${cinsiyetLbl}</div></div>
+        <div class="info-kart"><div class="lbl">At Sayısı</div>
+          <div class="val">${d.at_sayisi} at</div></div>
+        <div class="info-kart"><div class="lbl">Elenen / Kalan</div>
+          <div class="val">❌ ${d.elenen_sayisi} / ✅ ${d.kalan_sayisi}</div></div>
+      </div>
+    `;
+
+    // Tempo kartı
+    const tkEmoji = { HIZLI: "⚡", YAVAS: "🐢", BELIRSIZ: "❓" };
+    let rolHtml = "";
+    if (d.oyun_kurucu_adlar.length)
+      rolHtml += d.oyun_kurucu_adlar.map(a =>
+        `<span class="rol-badge">🎮 ${a}</span>`).join("");
+    if (d.sprinter_adlar.length)
+      rolHtml += d.sprinter_adlar.map(a =>
+        `<span class="rol-badge">⚡ ${a}</span>`).join("");
+    if (d.on_grup_adlar.length)
+      rolHtml += d.on_grup_adlar.map(a =>
+        `<span class="rol-badge">🏃 ${a}</span>`).join("");
+    if (d.geride_adlar.length)
+      rolHtml += d.geride_adlar.map(a =>
+        `<span class="rol-badge">🔙 ${a}</span>`).join("");
+
+    wrap.innerHTML += `
+      <div class="tempo-kart ${d.tempo_karar}">
+        <div class="tempo-baslik">
+          ${tkEmoji[d.tempo_karar] || "❓"}
+          BEKLENEN SENARYO: ${d.tempo_karar}
+          &nbsp;|&nbsp; Tahm. ${d.tempo_mes}: ${d.tahmini_tempo}
+        </div>
+        <div class="tempo-ac">${d.tempo_aciklama}</div>
+        ${rolHtml ? `<div class="tempo-roller">${rolHtml}</div>` : ""}
+      </div>
+    `;
+
+    // Özet bant
+    const kalanlar = d.sonuclar.filter(s => !s.elendi);
+    const topAdaylar = kalanlar.slice(0, 3).map(s =>
+      `<strong>${s.no}-${s.adi}</strong> (${s.puan}p)`).join(" › ");
+    wrap.innerHTML += `
+      <div class="ozet">
+        🏆 <strong>Öne Çıkan Adaylar:</strong> ${topAdaylar || "—"}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        📊 Tempo uyumlu: <strong>${d.sonuclar.filter(s=>s.tempo_uyumlu).length} at</strong>
+        &nbsp;|&nbsp;
+        ⭐ Sınıf üstü: <strong>${d.sonuclar.filter(s=>s.sinif_lbl&&s.sinif_lbl.includes("üstü")).length} at</strong>
+      </div>
+    `;
+
+    // Tablo
+    const stilBadge = (s) => {
+      const m = {
+        "OYN.KUR.": "badge-oynkur",
+        "SPRİNTER": "badge-sprinter",
+        "GERİDE":   "badge-geride",
+        "ÖN GRUP":  "badge-ongrupu",
+        "BELİRSİZ": "badge-belirsiz",
+      };
+      return `<span class="badge ${m[s]||'badge-belirsiz'}">${s}</span>`;
+    };
+
+    const pClass = (p) => p >= 60 ? "puan-yuksek" : p >= 40 ? "puan-orta" : "puan-dusuk";
+
+    let rows = d.sonuclar.map((s, i) => {
+      const etiket = s.elendi
+        ? `<span class="badge badge-elendi">❌ ELENDİ</span>`
+        : `<span class="badge badge-gecti">✅ DEVAM</span>`;
+
+      const s400Cell = s.s400_en_iyi
+        ? `<td class="s400-iyi">🔴 ${s.s400_str}</td>`
+        : `<td>${s.s400_str}</td>`;
+
+      const veriUyari = s.veri_eksik
+        ? `<br><span class="veri-eksik">⚠️ DİKKAT VERİ EKSİK</span>` : "";
+
+      const yildiz = s.tempo_yildiz ? ' <span class="yildiz">⭐</span>' : "";
+
+      const detayId = `det_${i}`;
+      const detayIcerigi = [
+        ...s.detaylar,
+        ...(s.eleme_nedenleri.length ? ["🚫 " + s.eleme_nedenleri.join(" | ")] : [])
+      ].join("<br>");
+
+      const detayBtn = detayIcerigi
+        ? `<button class="detay-btn" onclick="toggleDetay('${detayId}')">▸ detay</button>
+           <div class="detay-panel" id="${detayId}">${detayIcerigi}</div>`
+        : "";
+
+      return `
+        <tr class="${s.elendi ? 'elendi' : ''}">
+          <td><strong>${s.sira}</strong></td>
+          <td class="at-adi">${s.no}-${s.adi}${yildiz}${veriUyari}</td>
+          <td class="${pClass(s.puan)}">${s.puan}</td>
+          ${s400Cell}
+          <td>${s.s600_str}</td>
+          <td>${s.genel_form}</td>
+          <td>${stilBadge(s.stil_lbl)}</td>
+          <td>${s.jokey || "?"}</td>
+          <td>${s.kg || "?"} kg</td>
+          <td>${etiket}</td>
+          <td>${detayBtn}</td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML += `
+      <div class="tablo-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>SIRA</th>
+              <th>NO-AT ADI</th>
+              <th>PUAN</th>
+              <th>SON 400m 🔴=En iyi 3</th>
+              <th>SON 600m</th>
+              <th>FORM</th>
+              <th>STİL</th>
+              <th>JOKEY</th>
+              <th>KG</th>
+              <th>DURUM</th>
+              <th>DETAY</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function toggleDetay(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle("acik");
+    const btn = el.previousElementSibling;
+    btn.textContent = el.classList.contains("acik") ? "▾ detay" : "▸ detay";
+  }
+</script>
+</body>
+</html>
