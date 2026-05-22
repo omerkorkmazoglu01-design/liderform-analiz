@@ -15,19 +15,6 @@ import liderform_core as core
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "liderform2026")
 
-# Core içinde eksik olan sec_to_str fonksiyonunu buraya yerel olarak tanımlıyoruz
-def yerel_sec_to_str(seconds):
-    if seconds is None: return "?"
-    try:
-        minutes = int(seconds // 60)
-        rem_seconds = seconds % 60
-        if minutes > 0:
-            return f"{minutes}:{rem_seconds:05.2f}"
-        else:
-            return f"{rem_seconds:.2f}"
-    except Exception:
-        return "?"
-
 # ─── Yardımcı: core'dan web verisi üret ──────────────────────
 def analiz_yap(url):
     """
@@ -170,9 +157,7 @@ def _build_web_result(meta, rinfo, horses, acc_data, son_kosu_map):
         if t["sure_bazli_aday"] and t["sure8_son"] is not None:
             onde.append(t["sure8_son"])
     tahmini_tempo_sn = sum(onde)/len(onde) if onde else None
-    
-    # HATA VEREN SATIR BURADAYDI, YEREL FONKSİYONLA DEĞİŞTİRİLDİ:
-    tahmini_tempo_str = yerel_sec_to_str(tahmini_tempo_sn) if tahmini_tempo_sn else "?"
+    tahmini_tempo_str = core.sec_to_str(tahmini_tempo_sn) if tahmini_tempo_sn else "?"
 
     # Sprinter
     s400_lst = [t["son400_sn"] for t in at_tempo_pre if t["son400_sn"]]
@@ -270,7 +255,7 @@ def _build_web_result(meta, rinfo, horses, acc_data, son_kosu_map):
     # ── KARMA CİNSİYET ────────────────────────────────────────
     disi_sayisi  = sum(1 for h in horses if h.get("cinsiyet") == "dişi")
     erkek_sayisi = sum(1 for h in horses if h.get("cinsiyet") == "erkek")
-    karma_cinsiyet = is_ingiliz and disi_sayisi > 0 and merge_cinsiyet if False else (disi_sayisi > 0 and erkek_sayisi > 0)
+    karma_cinsiyet = is_ingiliz and disi_sayisi > 0 and erkek_sayisi > 0
 
     # ── PUANLAMA ─────────────────────────────────────────────
     W_SON400 = 30; W_SON600 = 20; W_FORM = 20; W_MESAFE = 15; W_STIL = 15
@@ -596,5 +581,5 @@ def analiz():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
