@@ -79,17 +79,53 @@ def style_dat(cell, even=False, bold=False, left=False, bg=None):
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "tr-TR,tr;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language":  "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding":  "gzip, deflate, br",
+    "Connection":       "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest":   "document",
+    "Sec-Fetch-Mode":   "navigate",
+    "Sec-Fetch-Site":   "none",
+    "Sec-Fetch-User":   "?1",
+    "Cache-Control":    "max-age=0",
+    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua-mobile":   "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "Referer": "https://www.liderform.com.tr/",
+    "DNT": "1",
 }
 
+# Oturum — cookie'leri saklayarak gerçek tarayıcı gibi davranır
+_SESSION = requests.Session()
+_SESSION.headers.update(HEADERS)
+
 def fetch_soup(url, deneme=3, bekleme=5):
+    global _SESSION
     for i in range(1, deneme + 1):
         try:
             print(f"         Bağlanıyor... (deneme {i}/{deneme}) {url[:70]}")
-            r = requests.get(url, timeout=45, headers=HEADERS)
+            # İlk istekte ana sayfayı ziyaret et (cookie al)
+            if i == 1:
+                try:
+                    _SESSION.get("https://www.liderform.com.tr/", timeout=15)
+                    time.sleep(1)
+                except Exception:
+                    pass
+            r = _SESSION.get(url, timeout=60, allow_redirects=True)
+            if r.status_code == 403:
+                # Yeni oturum aç ve tekrar dene
+                print(f"         403 alındı, oturum yenileniyor...")
+                _SESSION = requests.Session()
+                _SESSION.headers.update(HEADERS)
+                time.sleep(bekleme)
+                continue
             r.raise_for_status()
             return BeautifulSoup(r.content, "html.parser")
         except requests.exceptions.Timeout:
@@ -98,7 +134,16 @@ def fetch_soup(url, deneme=3, bekleme=5):
         except requests.exceptions.ConnectionError as e:
             print(f"         Bağlantı hatası: {e}")
             if i < deneme: time.sleep(bekleme)
-    raise Exception(f"Sayfa {deneme} denemede yüklenemedi: {url}")
+        except Exception as e:
+            if "403" in str(e):
+                print(f"         403 Forbidden — {bekleme}sn bekleniyor...")
+                if i < deneme: time.sleep(bekleme)
+            else:
+                raise
+    raise Exception(
+        f"Liderform.com.tr sayfaya erişim engellendi (403). "
+        f"Site ziyaretçi doğrulaması isteyebilir. Lütfen birkaç dakika sonra tekrar deneyin."
+    )
 
 # ─── URL Meta ─────────────────────────────────────────────
 AY = ["","Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
