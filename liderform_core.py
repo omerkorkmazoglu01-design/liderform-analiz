@@ -1005,8 +1005,10 @@ def hesapla_son_400_600(sureler, son_mesafe):
 
     return son_400, son_600
 
-def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=None):
+def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=None, web_mode=False):
     if son_kosu_map is None: son_kosu_map = {}
+    _web_sonuclar   = []   # ELEME sonuçları (web_mode için)
+    _web_tempo      = {}   # TEMPO kararı (web_mode için)
     wb = Workbook()
 
     # ── VERİ sayfası ──
@@ -1822,7 +1824,7 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
         # — Her iki koşuda tempo uyumlu → yıldız etiketi —
         tempo_yildiz = tempo_bilgi.get("uyum_skoru", 0) >= 3   # her 2 koşuda uyumlu + en az 1 başarı
 
-        sonuclar.append({
+        _s = {
             "no": horse["no"], "adi": at_adi,
             "puan": round(puan, 1),
             "detaylar": detaylar,
@@ -1830,6 +1832,8 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
             "eleme_nedenleri": eleme_nedenleri,
             "s400_str": t["s400_str"],
             "s600_str": t["s600_str"],
+            "s400_sn":  sure_to_sec(t["s400_str"]) if t["s400_str"] else None,
+            "s600_sn":  sure_to_sec(t["s600_str"]) if t["s600_str"] else None,
             "genel_form": genel_form,
             "ort_final_str": ort_final_str,
             "ort_final": ort_final,
@@ -1843,7 +1847,16 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
             "at_kg":         at_kg,
             "veri_eksik":    veri_eksik,
             "stil_lbl":      stil_lbl,
-        })
+            "jokey":         horse.get("jokey",""),
+            "gp":            horse.get("gp",""),
+            "hp":            horse.get("hp",""),
+            "kg":            horse.get("kg",""),
+            "agf":           horse.get("agf_pct",""),
+            "cinsiyet":      horse.get("cinsiyet",""),
+            "s400_en_iyi":   False,
+            "s600_kotu":     False,
+        }
+        sonuclar.append(_s)
 
     # Puana göre sırala
     sonuclar.sort(key=lambda x: x["puan"], reverse=True)
@@ -1851,25 +1864,28 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
         s["sira"] = i
 
     # ── Madde 5: En kötü son600 olan 2 atı ele (elenmediyse) ─
-    # En iyi koşu bazlı son600 kullanılır
     gec_s600 = [(i, sure_to_sec(s["s600_str"])) for i, s in enumerate(sonuclar)
                 if s["s600_str"] and sure_to_sec(s["s600_str"]) is not None and not s["elendi"]]
-    gec_s600_sirt = sorted(gec_s600, key=lambda x: x[1], reverse=True)  # yavaştan hızlıya
+    gec_s600_sirt = sorted(gec_s600, key=lambda x: x[1], reverse=True)
     _kotu_s600_idx = set(x[0] for x in gec_s600_sirt[:2])
     for idx in _kotu_s600_idx:
         if not sonuclar[idx]["elendi"]:
             sonuclar[idx]["elendi"] = True
+            sonuclar[idx]["s600_kotu"] = True
             sonuclar[idx]["eleme_nedenleri"].append(
                 f"Son600 en kötü 2 at içinde ({sonuclar[idx]['s600_str']}) → ELENDİ"
             )
 
-    # ── Madde 6: En iyi son400 olan 3 atı işaretle (kalın kırmızı) ─
+    # ── Madde 6: En iyi son400 olan 3 atı işaretle ─
     gec_s400 = [(i, sure_to_sec(s["s400_str"])) for i, s in enumerate(sonuclar)
                 if s["s400_str"] and sure_to_sec(s["s400_str"]) is not None]
-    gec_s400_sirt = sorted(gec_s400, key=lambda x: x[1])  # hızlıdan yavaşa
+    gec_s400_sirt = sorted(gec_s400, key=lambda x: x[1])
     _iyi_s400_idx = set(x[0] for x in gec_s400_sirt[:3])
     for idx in _iyi_s400_idx:
-        sonuclar[idx]["s400_en_iyi"] = True  # işaretle
+        sonuclar[idx]["s400_en_iyi"] = True
+
+    # web_mode: ELEME sonuçlarını kaydet
+    _web_sonuclar = sonuclar[:]
 
     # ── Sayfa başlığı ──────────────────────────────────────────
     ırk_lbl = ("ARAP" if is_arap else ("İNGİLİZ" if is_ingiliz else ""))
@@ -2268,7 +2284,44 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
     sanslı_adlar = [f"{t['no']}-{t['adi']}" for t in rol_sanslilar]
     dezav_adlar  = [f"{t['no']}-{t['adi']}" for t in rol_dezavantajli]
 
-    # ── Başlık satırları ───────────────────────────────────────
+    # ── web_mode: tempo verisini kaydet ───────────────────────
+    _web_tempo = {
+        "karar":           tempo_karar,
+        "aciklama":        tempo_detay,
+        "tahmini":         tahmini_tempo_str,
+        "tempo_mes":       TEMPO_MES,
+        "sanslilar":       sanslı_adlar,
+        "dezavantajlilar": dezav_adlar,
+        "oyun_kurucular":  [f"{t['no']}-{t['adi']}" for t in oyun_kurucular],
+        "pot_kurucular":   [f"{t['no']}-{t['adi']}" for t in pot_kurucular],
+        "sprinterlar":     [f"{t['no']}-{t['adi']}" for t in sprinterlar],
+        "on_gruplar":      [f"{t['no']}-{t['adi']}" for t in on_gruplar],
+        "geride_adlar":    [f"{t['no']}-{t['adi']}" for t in at_tempo
+                            if t["geride"] and not t["sprinter"]],
+        "at_detay":        [
+            {
+                "no": t["no"], "adi": t["adi"],
+                "rol": ("OYN.KUR." if t["oyun_kurucu"]
+                        else "POT.KUR." if t["pot_oyun_kurucu"]
+                        else "SPRİNTER" if t["sprinter"]
+                        else "ÖN GRUP" if t["on_grup"]
+                        else "GERİDE"  if t["geride"]
+                        else "BELİRSİZ"),
+                "uyumlu":    t.get("tempo_uyumlu", False),
+                "uyum_detay": t.get("uyum_detay", []),
+                "son400":    t.get("son400",""),
+                "son600":    t.get("son600",""),
+            }
+            for t in at_tempo
+        ],
+    }
+
+    # web_mode: Excel yazmadan veri döndür
+    if web_mode:
+        return {
+            "eleme":  _web_sonuclar,
+            "tempo":  _web_tempo,
+        }
     tempo_title = (
         f"TEMPO & SENARYO ANALIZI  |  "
         f"{meta.get('sehir','').upper()} {meta.get('kosu_no','')}. KOSU  |  "
@@ -2438,7 +2491,8 @@ def build_excel(meta, rinfo, horses, acc_data, mesafeler, fname, son_kosu_map=No
         ws_t.row_dimensions[rn].height = 40
 
 
-    wb.save(fname)
+    if not web_mode:
+        wb.save(fname)
 
 
 
