@@ -219,48 +219,46 @@ def _fetch_html_requests(url, deneme=3, bekleme=5):
                 raise
     raise Exception(f"Sayfa {deneme} denemede yüklenemedi: {url}")
 
-# ── Ana fetch fonksiyonu — önce playwright dene ───────────
+# ── Ana fetch fonksiyonu — önce requests dene, sonra playwright ───────────
 def fetch_soup(url, deneme=3, bekleme=5):
-    print(f"         Bağlanıyor: {url[:70]}")
-    # Playwright mevcut mu?
+    print(f"         Bağlanıyor: {url[:70]}", flush=True)
+
+    # Önce requests ile dene (hızlı)
+    try:
+        print("         requests ile deneniyor...", flush=True)
+        html = _fetch_html_requests(url, deneme=2, bekleme=3)
+        soup = BeautifulSoup(html, "html.parser")
+        title = soup.title.string if soup.title else ""
+        print(f"         requests başarılı. Başlık: {title}", flush=True)
+        # Bot koruması kontrolü
+        if "Just a moment" in title or "403" in title or "Access Denied" in title:
+            print("         Bot koruması tespit edildi, playwright deneniyor...", flush=True)
+            raise Exception("Bot koruması")
+        if soup.find("table") or soup.find("div", class_="program"):
+            return soup
+        # İçerik boşsa playwright dene
+        print("         İçerik boş geldi, playwright deneniyor...", flush=True)
+        raise Exception("İçerik boş")
+    except Exception as e:
+        print(f"         requests başarısız: {e}", flush=True)
+
+    # Playwright dene
     try:
         import playwright
-        _playwright_ok = True
-    except ImportError:
-        _playwright_ok = False
+        print("         Playwright ile açılıyor...", flush=True)
+        html = _fetch_html_playwright(url)
+        soup = BeautifulSoup(html, "html.parser")
+        title = soup.title.string if soup.title else ""
+        print(f"         Playwright başlık: {title}", flush=True)
+        return soup
+    except Exception as e:
+        print(f"         Playwright hatası: {e}", flush=True)
 
-    html = None
-    if _playwright_ok:
-        try:
-            print("         Playwright ile açılıyor...")
-            html = _fetch_html_playwright(url)
-            print("         Playwright başarılı ✓")
-        except Exception as e:
-            print(f"         Playwright hatası: {e} — requests'e geçiliyor...")
-            html = None
-
-    if html is None:
-        print("         requests ile deneniyor...")
-        html = _fetch_html_requests(url, deneme=deneme, bekleme=bekleme)
-
-    if not html:
-        raise Exception("Sayfa içeriği boş geldi.")
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    # 403 / bot koruması kontrolü
-    title = soup.title.string if soup.title else ""
-    if "403" in title or "Access Denied" in title or "Forbidden" in title:
-        raise Exception(
-            "Liderform.com.tr erişim engelledi (403). "
-            "Lütfen birkaç dakika sonra tekrar deneyin."
-        )
-    if "Just a moment" in (soup.get_text()[:200] or ""):
-        raise Exception(
-            "Cloudflare doğrulaması aktif. Lütfen 1-2 dakika bekleyip tekrar deneyin."
-        )
-
-    return soup
+    raise Exception(
+        "Liderform.com.tr'ye erişilemedi. "
+        "Site geçici olarak erişimi engelliyor olabilir. "
+        "Lütfen birkaç dakika sonra tekrar deneyin."
+    )
 
 # ─── URL Meta ─────────────────────────────────────────────
 AY = ["","Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
