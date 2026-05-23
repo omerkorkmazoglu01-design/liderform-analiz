@@ -106,9 +106,8 @@ HEADERS = {
 def _fetch_html_playwright(url):
     """Gerçek Chromium tarayıcısıyla sayfayı açar — Cloudflare/bot engeline karşı."""
     from playwright.sync_api import sync_playwright
-    import os
+    import os, base64
 
-    # Railway/Docker ortamında sistem Chromium yolu
     chromium_path = os.environ.get("CHROMIUM_PATH", None)
 
     html = None
@@ -122,12 +121,74 @@ def _fetch_html_playwright(url):
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--single-process",
+                "--window-size=1920,1080",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
             ]
         )
         if chromium_path and os.path.exists(chromium_path):
             launch_opts["executable_path"] = chromium_path
 
         browser = p.chromium.launch(**launch_opts)
+        ctx = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            locale="tr-TR",
+            timezone_id="Europe/Istanbul",
+            viewport={"width": 1920, "height": 1080},
+            extra_http_headers={
+                "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Referer": "https://www.liderform.com.tr/",
+                "DNT": "1",
+            }
+        )
+        # navigator.webdriver'ı ve diğer bot izlerini gizle
+        ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+            Object.defineProperty(navigator, 'languages', {get: () => ['tr-TR','tr','en-US','en']});
+            window.chrome = {runtime: {}};
+            Object.defineProperty(navigator, 'permissions', {
+                get: () => ({ query: () => Promise.resolve({ state: 'granted' }) })
+            });
+        """)
+        page = ctx.new_page()
+
+        # Önce ana sayfayı ziyaret et (cookie ve oturum al)
+        try:
+            print("         Ana sayfa ziyaret ediliyor (cookie için)...")
+            page.goto("https://www.liderform.com.tr/", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
+            # Mouse hareketi simülasyonu (bot değiliz diyoruz)
+            page.mouse.move(500, 300)
+            page.wait_for_timeout(500)
+        except Exception as e:
+            print(f"         Ana sayfa hatası (devam): {e}")
+
+        # Asıl sayfayı aç
+        print(f"         Hedef sayfa açılıyor: {url[:60]}")
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(3000)
+
+        # Sayfa başlığını logla (bot koruması tespiti için)
+        title = page.title()
+        print(f"         Sayfa başlığı: {title}")
+
+        # Screenshot al ve logla (debug için)
+        try:
+            screenshot = page.screenshot(type="png")
+            b64 = base64.b64encode(screenshot).decode()
+            print(f"         SCREENSHOT_B64_START:{b64[:100]}...SCREENSHOT_B64_END")
+        except Exception as e:
+            print(f"         Screenshot alınamadı: {e}")
+
+        html = page.content()
+        browser.close()
+    return html
         ctx = browser.new_context(
             user_agent=HEADERS["User-Agent"],
             locale="tr-TR",
