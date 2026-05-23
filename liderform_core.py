@@ -102,16 +102,59 @@ HEADERS = {
     "DNT": "1",
 }
 
-# Oturum — cookie'leri saklayarak gerçek tarayıcı gibi davranır
+# ── Playwright ile HTML çek (bot engelini aşar) ────────────
+def _fetch_html_playwright(url):
+    """Gerçek Chromium tarayıcısıyla sayfayı açar — Cloudflare/bot engeline karşı."""
+    from playwright.sync_api import sync_playwright
+    html = None
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+            ]
+        )
+        ctx = browser.new_context(
+            user_agent=HEADERS["User-Agent"],
+            locale="tr-TR",
+            viewport={"width": 1280, "height": 800},
+            extra_http_headers={
+                "Accept-Language": "tr-TR,tr;q=0.9",
+                "Referer": "https://www.liderform.com.tr/",
+            }
+        )
+        # navigator.webdriver'ı gizle
+        ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
+            Object.defineProperty(navigator, 'languages', {get: () => ['tr-TR','tr','en-US']});
+        """)
+        page = ctx.new_page()
+        # Önce ana sayfayı ziyaret et (cookie al)
+        try:
+            page.goto("https://www.liderform.com.tr/", wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(1500)
+        except Exception:
+            pass
+        # Asıl sayfayı aç
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(2000)
+        html = page.content()
+        browser.close()
+    return html
+
+# ── requests fallback (local/VPS ortamı için) ─────────────
 _SESSION = requests.Session()
 _SESSION.headers.update(HEADERS)
 
-def fetch_soup(url, deneme=3, bekleme=5):
+def _fetch_html_requests(url, deneme=3, bekleme=5):
     global _SESSION
     for i in range(1, deneme + 1):
         try:
-            print(f"         Bağlanıyor... (deneme {i}/{deneme}) {url[:70]}")
-            # İlk istekte ana sayfayı ziyaret et (cookie al)
             if i == 1:
                 try:
                     _SESSION.get("https://www.liderform.com.tr/", timeout=15)
@@ -120,30 +163,61 @@ def fetch_soup(url, deneme=3, bekleme=5):
                     pass
             r = _SESSION.get(url, timeout=60, allow_redirects=True)
             if r.status_code == 403:
-                # Yeni oturum aç ve tekrar dene
-                print(f"         403 alındı, oturum yenileniyor...")
                 _SESSION = requests.Session()
                 _SESSION.headers.update(HEADERS)
                 time.sleep(bekleme)
                 continue
             r.raise_for_status()
-            return BeautifulSoup(r.content, "html.parser")
-        except requests.exceptions.Timeout:
-            print(f"         Zaman aşımı! {bekleme}sn bekleniyor...")
-            if i < deneme: time.sleep(bekleme)
-        except requests.exceptions.ConnectionError as e:
-            print(f"         Bağlantı hatası: {e}")
-            if i < deneme: time.sleep(bekleme)
+            return r.text
         except Exception as e:
-            if "403" in str(e):
-                print(f"         403 Forbidden — {bekleme}sn bekleniyor...")
-                if i < deneme: time.sleep(bekleme)
+            if i < deneme:
+                time.sleep(bekleme)
             else:
                 raise
-    raise Exception(
-        f"Liderform.com.tr sayfaya erişim engellendi (403). "
-        f"Site ziyaretçi doğrulaması isteyebilir. Lütfen birkaç dakika sonra tekrar deneyin."
-    )
+    raise Exception(f"Sayfa {deneme} denemede yüklenemedi: {url}")
+
+# ── Ana fetch fonksiyonu — önce playwright dene ───────────
+def fetch_soup(url, deneme=3, bekleme=5):
+    print(f"         Bağlanıyor: {url[:70]}")
+    # Playwright mevcut mu?
+    try:
+        import playwright
+        _playwright_ok = True
+    except ImportError:
+        _playwright_ok = False
+
+    html = None
+    if _playwright_ok:
+        try:
+            print("         Playwright ile açılıyor...")
+            html = _fetch_html_playwright(url)
+            print("         Playwright başarılı ✓")
+        except Exception as e:
+            print(f"         Playwright hatası: {e} — requests'e geçiliyor...")
+            html = None
+
+    if html is None:
+        print("         requests ile deneniyor...")
+        html = _fetch_html_requests(url, deneme=deneme, bekleme=bekleme)
+
+    if not html:
+        raise Exception("Sayfa içeriği boş geldi.")
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 403 / bot koruması kontrolü
+    title = soup.title.string if soup.title else ""
+    if "403" in title or "Access Denied" in title or "Forbidden" in title:
+        raise Exception(
+            "Liderform.com.tr erişim engelledi (403). "
+            "Lütfen birkaç dakika sonra tekrar deneyin."
+        )
+    if "Just a moment" in (soup.get_text()[:200] or ""):
+        raise Exception(
+            "Cloudflare doğrulaması aktif. Lütfen 1-2 dakika bekleyip tekrar deneyin."
+        )
+
+    return soup
 
 # ─── URL Meta ─────────────────────────────────────────────
 AY = ["","Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
