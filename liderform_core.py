@@ -106,9 +106,14 @@ HEADERS = {
 def _fetch_html_playwright(url):
     """Gerçek Chromium tarayıcısıyla sayfayı açar — Cloudflare/bot engeline karşı."""
     from playwright.sync_api import sync_playwright
+    import os
+
+    # Railway/Docker ortamında sistem Chromium yolu
+    chromium_path = os.environ.get("CHROMIUM_PATH", None)
+
     html = None
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+        launch_opts = dict(
             headless=True,
             args=[
                 "--no-sandbox",
@@ -116,8 +121,13 @@ def _fetch_html_playwright(url):
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--single-process",
             ]
         )
+        if chromium_path and os.path.exists(chromium_path):
+            launch_opts["executable_path"] = chromium_path
+
+        browser = p.chromium.launch(**launch_opts)
         ctx = browser.new_context(
             user_agent=HEADERS["User-Agent"],
             locale="tr-TR",
