@@ -189,34 +189,6 @@ def _fetch_html_playwright(url):
         html = page.content()
         browser.close()
     return html
-        ctx = browser.new_context(
-            user_agent=HEADERS["User-Agent"],
-            locale="tr-TR",
-            viewport={"width": 1280, "height": 800},
-            extra_http_headers={
-                "Accept-Language": "tr-TR,tr;q=0.9",
-                "Referer": "https://www.liderform.com.tr/",
-            }
-        )
-        # navigator.webdriver'ı gizle
-        ctx.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
-            Object.defineProperty(navigator, 'languages', {get: () => ['tr-TR','tr','en-US']});
-        """)
-        page = ctx.new_page()
-        # Önce ana sayfayı ziyaret et (cookie al)
-        try:
-            page.goto("https://www.liderform.com.tr/", wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(1500)
-        except Exception:
-            pass
-        # Asıl sayfayı aç
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(2000)
-        html = page.content()
-        browser.close()
-    return html
 
 # ── requests fallback (local/VPS ortamı için) ─────────────
 _SESSION = requests.Session()
