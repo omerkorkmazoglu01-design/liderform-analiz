@@ -195,16 +195,32 @@ _SESSION = requests.Session()
 _SESSION.headers.update(HEADERS)
 
 def _fetch_html_requests(url, deneme=3, bekleme=5):
+    """cloudscraper ile Cloudflare bypass — requests'ten daha güçlü."""
+    try:
+        import cloudscraper
+        scraper = cloudscraper.create_scraper(
+            browser={"browser": "chrome", "platform": "windows", "mobile": False}
+        )
+        scraper.headers.update({
+            "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8",
+            "Referer": "https://www.liderform.com.tr/",
+        })
+        print("         cloudscraper ile deneniyor...", flush=True)
+        r = scraper.get(url, timeout=30)
+        print(f"         cloudscraper status: {r.status_code}", flush=True)
+        if r.status_code == 200:
+            return r.text
+        raise Exception(f"HTTP {r.status_code}")
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"         cloudscraper hatası: {e}", flush=True)
+
+    # Fallback: düz requests
     global _SESSION
     for i in range(1, deneme + 1):
         try:
-            if i == 1:
-                try:
-                    _SESSION.get("https://www.liderform.com.tr/", timeout=15)
-                    time.sleep(1)
-                except Exception:
-                    pass
-            r = _SESSION.get(url, timeout=60, allow_redirects=True)
+            r = _SESSION.get(url, timeout=30, allow_redirects=True)
             if r.status_code == 403:
                 _SESSION = requests.Session()
                 _SESSION.headers.update(HEADERS)
@@ -217,7 +233,6 @@ def _fetch_html_requests(url, deneme=3, bekleme=5):
                 time.sleep(bekleme)
             else:
                 raise
-    raise Exception(f"Sayfa {deneme} denemede yüklenemedi: {url}")
 
 # ── Ana fetch fonksiyonu — önce requests dene, sonra playwright ───────────
 def fetch_soup(url, deneme=3, bekleme=5):
